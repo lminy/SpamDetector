@@ -99,3 +99,9 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# lminy
+TR/
+TT/
+TRAIN/
+.DS_STORE/
