@@ -5,12 +5,14 @@
 # and store it in a new file with the same name in the dst dir.
 
 import mailparser
+import email
 import os, sys, stat
 import shutil
 import sys
 import json
 import nltk
 import string
+import datetime
 from bs4 import BeautifulSoup
 from nltk.stem.snowball import SnowballStemmer
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -72,6 +74,15 @@ def ProcessMessage(mail):
 				}
 				listAttach.append(attachJson)
 
+	# Parse Header, mailparser lib doesn't parse the entire header
+	# Price to pay to have simpler code 
+	headers = email.message_from_string(mail.headers)
+
+	# Get the list of all receivers (To, CC, Bcc)
+	receivers = GetAllReceivers(headers)
+	hops = headers.get_all('Received')
+	if hops == None:
+		hops = []
 
 	msgJson = { 
 	'from' : mail.from_,
@@ -80,11 +91,33 @@ def ProcessMessage(mail):
 	'date' : str(mail.date_mail),
 	'subject' : mail.subject,
 	'payload' : data,
-	'attachments' : listAttach
+	'attachments' : listAttach,
+	'X-Mailer' : headers['X-Mailer'],
+	'NumberHops' : len(hops),
+	'NumberReceiver' : len(receivers),
+	'ValidityDate' : CheckDateValidity(mail)# 1 is valid, 0 is not valid
 	}
 
 	# Return the JSON version of the dict
 	return msgJson # json.dumps(msgJson, indent=4, sort_keys=False)
+
+def CheckDateValidity(mail):
+	# If date is in the future
+	if mail.date_mail > datetime.datetime.today():
+		return 0
+	return 1
+	
+def GetAllReceivers(headers):
+	if headers.get_all('To'):
+		receivers = headers.get_all('To')
+	else:
+		receivers = []
+	if headers.get_all('CC') :
+		receivers += headers.get_all('CC')
+	if headers.get_all('Bcc'):
+		receivers += headers.get_all('Bcc')
+	return receivers
+
 
 def ProcessString(s):
 	# Render html if there any
