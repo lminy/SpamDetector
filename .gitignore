@@ -104,7 +104,9 @@ ENV/
 TR/
 TT/
 TRAIN/
+TEST/
 .DS_STORE/
-énoné/
+.DS_Store
+énoncé/
 papers/
 dummy_tt.py
