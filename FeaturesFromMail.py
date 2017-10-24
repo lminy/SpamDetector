@@ -32,14 +32,14 @@ def ExtractSubPayload (filename):
 	b = fp.read()
 
 	msg = mailparser.parse_from_bytes(b)
-	
+
 
 	return ProcessMessage(msg)
 
-# Extract useful data from Message and return a JSON string 
+# Extract useful data from Message and return a JSON string
 def ProcessMessage(mail):
 	data = json.loads(mail.parsed_mail_json)
-	
+
 	data = ProcessString(mail.body)
 	headers = ProcessString(mail.headers)
 
@@ -47,20 +47,20 @@ def ProcessMessage(mail):
 	listAttach = ExtractAttachments(mail)
 
 	# Parse Header, mailparser lib doesn't parse the entire header
-	# Price to pay to have simpler code 
+	# Price to pay to have simpler code
 	headers = email.message_from_string(mail.headers)
 
 	# Get the list of all receivers (To, CC, Bcc)
 	receivers = GetAllReceivers(headers)
 	# GetDeliveryTime(headers)
 	nbrHops = GetNbrHop(headers)
-	
+
 	if headers['X-Mailer'] :
 		xMailer = ProcessString(headers['X-Mailer'])
 	else :
 		xMailer = None
 
-	msgJson = { 
+	msgJson = {
 	'from' : mail.from_,
 	'headers' : headers,
 	'to' : mail.to_,
@@ -79,14 +79,14 @@ def ProcessMessage(mail):
 
 # Extract the text of plain text attachments and the filename of others
 def ExtractAttachments(mail):
-	attachments = mail.attachments_list 
+	attachments = mail.attachments_list
 	listAttach = []
 	# If there's is an attachment
 	if len(attachments) > 0 :
-		
+
 		for a in attachments:
 			if a['mail_content_type'] == 'text/plain':
-				
+
 				text = ProcessString(a['payload'])
 				# If it's plain text we get the payload
 				attachJson = {
@@ -113,7 +113,7 @@ def ExtractAttachments(mail):
 
 # get the total time of travel of mail (receivers field are used to compue it)
 def GetDeliveryTime(headers):
-	receivers = headers.get_all('Received') 
+	receivers = headers.get_all('Received')
 	if receivers :
 		firstReceiver = receivers[0]
 		lastReceiver = receivers[len(receivers)-1]
@@ -122,7 +122,7 @@ def GetDeliveryTime(headers):
 		if dateDelivery  == None:
 			dateDelivery = GetTimeFromReceiverString(headers.get('date'))
 
-		
+
 		print("Date Delivery : " + str(dateDelivery))
 		print("Date sent : " + str(dateSent))
 		print("Time taken ; " + str(dateDelivery - dateSent))
@@ -132,7 +132,7 @@ def GetDeliveryTime(headers):
 		# print(datetime.datetime.strptime(delDate, '%a %b %d %X %Y'))
 	else :
 		print("No date")
-	
+
 def GetTimeFromReceiverString(receiver):
 	if 'GMT' in receiver:
 			receiver = receiver.replace('GMT', '+0000')
@@ -151,7 +151,7 @@ def GetTimeFromReceiverString(receiver):
 
 	"""
 	m = re.search('[0-9]{1,2}\s*[a-zA-Z]{3}\s*[0-9]{2,}\s*[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\s*[\+\-\0-9]{5}', receiver)
-	if m : 
+	if m :
 		res = m.group(0)
 		# Correct bad format for timezone (+08:00 to +0800)
 		if res[-3] == '-' or res[-3] == '+':
@@ -167,7 +167,7 @@ def GetTimeFromReceiverString(receiver):
 		return dateparser.parse(res)
 	else :
 		m = re.search('[0-9]{1,2}\s*[a-zA-Z]{3}\s*[0-9]{2,}\s*[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\s*[A-Z]{3,}', receiver)
-		if m : 
+		if m :
 			res = m.group(0)
 			return dateparser.parse(res)
 		# No match use the date field instead
@@ -185,7 +185,7 @@ def CheckDateValidity(mail):
 	if mail.date_mail > datetime.datetime.today():
 		return 0
 	return 1
-	
+
 def GetAllReceivers(headers):
 	if headers.get_all('To'):
 		receivers = headers.get_all('To')
@@ -206,7 +206,7 @@ def ProcessString(s):
 			r = r.replace(c,' ')
 	return r
 
-# For html content, interprets it to only keep the text result 
+# For html content, interprets it to only keep the text result
 def GetRenderFromHTMLString(html):
 	soup = BeautifulSoup(html, 'lxml')
 	[s.extract() for s in soup('style')]
@@ -221,7 +221,7 @@ def GetTextFromMessage(processedMessage):
 	text += " " +  processedMessage['payload']
 	for a in processedMessage['attachments']:
 		text += " " +  a['filename']
-		if 'payload' in a: 
+		if 'payload' in a:
 			text += " " + a['payload']
 
 	return text
@@ -232,7 +232,7 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 	save the file to the dstdir with the same name.'''
 	if not os.path.exists(dstdir): # dest path doesnot exist
 		os.makedirs(dstdir)
-	files = os.listdir(srcdir)
+	files = sorted(os.listdir(srcdir), key=lambda x: (int(re.sub('\D','',x)),x))
 	textList = []
 	nbrHopList = []
 	nbrReceiversList = []
@@ -281,19 +281,19 @@ def BuildText(text):
 	sentences = nltk.tokenize.sent_tokenize(text)
 	for s in sentences:
 		words = nltk.tokenize.word_tokenize(s)
-		
+
 
 	# Remove stop_words
 	stopWords = nltk.corpus.stopwords.words('english')
 	filtered = [e.lower() for e in words if not e.lower() in stopWords]
-	
+
 
 	# Stemming
 	result = []
 	stemmer = SnowballStemmer('english')
 	for word in filtered:
 		result.append(stemmer.stem(word))
-	
+
 
 	return ' '.join(result)
 
