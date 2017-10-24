@@ -71,6 +71,7 @@ def ProcessMessage(mail):
 	'X-Mailer' : xMailer,
 	'NumberHop' : nbrHops,
 	'NumberReceiver' : len(receivers),
+	'NumberHeaders' : len(headers.keys()),
 	'ValidityDate' : CheckDateValidity(mail)# 1 is valid, 0 is not valid
 	}
 
@@ -204,7 +205,15 @@ def ProcessString(s):
 	# Replace useless chars
 	for c in ['\n', '\r\n', '\\n', '\\', '\r\n\t', '\r' '\t', "\r" ]:
 			r = r.replace(c,' ')
+	r = re.sub(r'(\\+x[0-9A-Fa-f]{2})', ' ', r.encode('unicode_escape').decode())
 	return r
+
+def unescapematch(matchobj):
+	escapesequence = matchobj.group(0)
+	digits = escapesequence[2:]
+	ordinal = int(escapesequence, 16)
+	char = chr(ordinal)
+	return char
 
 # For html content, interprets it to only keep the text result
 def GetRenderFromHTMLString(html):
@@ -232,10 +241,12 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 	save the file to the dstdir with the same name.'''
 	if not os.path.exists(dstdir): # dest path doesnot exist
 		os.makedirs(dstdir)
+	# Sort the list of files, to process files in order
 	files = sorted(os.listdir(srcdir), key=lambda x: (int(re.sub('\D','',x)),x))
 	textList = []
 	nbrHopList = []
 	nbrReceiversList = []
+	nbrHeaders = []
 	validityDateList = []
 	allFeatures = []
 	for file in files:
@@ -254,19 +265,17 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 			nbrHopList.append(processedMessage['NumberHop'])
 			# Nbr nbr Receivers
 			nbrReceiversList.append(processedMessage['NumberReceiver'])
+			# Nbr headers
+			nbrHeaders.append(processedMessage['NumberHeaders'])
 			# Validity Date
 			validityDateList.append(processedMessage['ValidityDate'])
-
-			#dstfile = open(dstpath, 'w')
-			#dstfile.write(result)
-			#dstfile.close()
-
 
 	allFeatures.append(textList)
 	allFeatures.append(nbrHopList)
 	allFeatures.append(nbrReceiversList)
+	allFeatures.append(nbrHeaders)
 	allFeatures.append(validityDateList)
-	print("%d %d %d %d" % (len(textList),len(nbrHopList),len(nbrReceiversList),len(validityDateList)))
+	print("%d %d %d %d %d" % (len(textList),len(nbrHopList),len(nbrReceiversList),len(validityDateList), len(nbrHeaders)))
 	dstpath = os.path.join(dstdir, 'features')
 	with open(dstpath, 'w') as dstfile :
 		json.dump(allFeatures, dstfile)
@@ -282,18 +291,15 @@ def BuildText(text):
 	for s in sentences:
 		words = nltk.tokenize.word_tokenize(s)
 
-
 	# Remove stop_words
 	stopWords = nltk.corpus.stopwords.words('english')
 	filtered = [e.lower() for e in words if not e.lower() in stopWords]
-
 
 	# Stemming
 	result = []
 	stemmer = SnowballStemmer('english')
 	for word in filtered:
 		result.append(stemmer.stem(word))
-
 
 	return ' '.join(result)
 
