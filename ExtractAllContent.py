@@ -4,8 +4,14 @@
 # This function extract all the contents, ie subject and first part from the .eml file
 # and store it in a new file with the same name in the dst dir.
 
+# This script extract information from the mail file, and write them into a file, one for each email
+# the result files contains the information in Json information
+# The script ComputeStats can then be used to get statistics
+
 import email.parser
 import os, sys, stat
+import datetime
+import email.utils
 import shutil
 import sys
 import json
@@ -28,6 +34,11 @@ def GetJsonFromMessage(msg):
 
 	payload = ParsePayload(msg)
 	
+	d = email.utils.parsedate_tz(msg.get('date'))
+	t = email.utils.mktime_tz(d)
+	date =  datetime.datetime.utcfromtimestamp(t)
+
+
 	# Create dict with all values
 	msgJson = { 
 	'from' : msg.get_all('from', []),
@@ -35,9 +46,14 @@ def GetJsonFromMessage(msg):
 	'reply-to' : msg.get_all('reply-to', []),
 	'return-path' : msg.get_all('return-path', []),
 	'received' : msg.get_all('received', []),
-	'date' : msg.get_all('date', []),
+	'date' : str(date),
 	'subject' : msg.get('subject'),
-	'payload' : payload
+	'payload' : payload,
+	'headerCount' : len(msg.keys()),
+	'X-Mailer' : msg.get('X-Mailer'),
+	'toCount' : len(msg.get_all('to', [])),
+	'ccCount' : len(msg.get_all('CC', [])),
+	'BccCount' : len(msg.get_all('Bcc', []))
 	}
 
 	# Return the JSON version of the dict

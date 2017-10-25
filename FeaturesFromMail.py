@@ -4,12 +4,12 @@
 	# Version 1.0 by Tao Ban, 2010.5.26
 	# This function extract all the contents, ie subject and first part from the .eml file
 	# and store it in a new file with the same name in the dst dir.
-
+# This script compute the feature from the mails
+# Usage : script.py mailDirectory DestinationDirectoryForFeaturesFile
 import mailparser
 import email
 import os, sys, stat
 import shutil
-import sys
 import json
 import nltk
 import string
@@ -50,7 +50,6 @@ def ProcessMessage(mail):
 
 	# Get the list of all receivers (To, CC, Bcc)
 	receivers = GetAllReceivers(headers)
-	# GetDeliveryTime(headers)
 	nbrHops = GetNbrHop(headers)
 
 	if headers['X-Mailer'] :
@@ -59,10 +58,6 @@ def ProcessMessage(mail):
 		xMailer = None
 
 	msgJson = {
-	'from' : mail.from_,
-	'headers' : headers,
-	'to' : mail.to_,
-	'date' : str(mail.date_mail),
 	'subject' : mail.subject,
 	'payload' : data,
 	'attachments' : listAttach,
@@ -110,47 +105,6 @@ def ExtractAttachments(mail):
 				listAttach.append(attachJson)
 	return listAttach
 
-# get the total time of travel of mail (receivers field are used to compue it)
-def GetDeliveryTime(headers):
-	receivers = headers.get_all('Received')
-	if receivers :
-		firstReceiver = receivers[0]
-		lastReceiver = receivers[len(receivers)-1]
-		dateSent = GetTimeFromReceiverString(lastReceiver)
-		dateDelivery = GetTimeFromReceiverString(firstReceiver)
-		if dateDelivery  == None:
-			dateDelivery = GetTimeFromReceiverString(headers.get('date'))
-
-
-		print("Date Delivery : " + str(dateDelivery))
-		print("Date sent : " + str(dateSent))
-		print("Time taken ; " + str(dateDelivery - dateSent))
-
-	elif headers.get('Delivery-Date') :
-		delDate = headers.get('Delivery-Date')
-		# print(datetime.datetime.strptime(delDate, '%a %b %d %X %Y'))
-	else :
-		print("No date")
-
-# Not working, certain mails are too malformed to extract the date from the receiver field
-def GetTimeFromReceiverString(receiver):
-	parts = receiver.split(';')
-	date = parts[len(parts)-1]
-	print(date)
-	d = email.utils.parsedate_tz(date)
-	if d :
-		t = email.utils.mktime_tz(d)
-	elif dateparser.parse(date) :
-		t = dateparser.parse(date).timestamp()
-	else :
-		print(receiver[-37:])
-		date = receiver[-37:]	
-		d = email.utils.parsedate_tz(date)
-		if d :
-			t = email.utils.mktime_tz(d)
-		else :
-			t = dateparser.parse(date).timestamp()
-	return datetime.datetime.utcfromtimestamp(t)
 
 # Get the number of received field in the mail header
 def GetNbrHop(headers):
