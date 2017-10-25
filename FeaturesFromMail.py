@@ -1,8 +1,9 @@
 #!/usr/bin/python
-# FileName: Subsampling.py
-# Version 1.0 by Tao Ban, 2010.5.26
-# This function extract all the contents, ie subject and first part from the .eml file
-# and store it in a new file with the same name in the dst dir.
+# This script is a modification of the script descripted below
+	# FileName: Subsampling.py
+	# Version 1.0 by Tao Ban, 2010.5.26
+	# This function extract all the contents, ie subject and first part from the .eml file
+	# and store it in a new file with the same name in the dst dir.
 
 import mailparser
 import email
@@ -17,11 +18,9 @@ import dateparser
 import re
 from bs4 import BeautifulSoup
 from nltk.stem.snowball import SnowballStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 def ExtractSubPayload (filename):
 	''' Extract the subject and payload from the .eml file.
-
 	'''
 	if not os.path.exists(filename): # dest path doesnot exist
 		print("ERROR: input file does not exist:", filename)
@@ -32,7 +31,6 @@ def ExtractSubPayload (filename):
 	b = fp.read()
 
 	msg = mailparser.parse_from_bytes(b)
-
 
 	return ProcessMessage(msg)
 
@@ -134,47 +132,27 @@ def GetDeliveryTime(headers):
 	else :
 		print("No date")
 
+# Not working, certain mails are too malformed to extract the date from the receiver field
 def GetTimeFromReceiverString(receiver):
-	if 'GMT' in receiver:
-			receiver = receiver.replace('GMT', '+0000')
-	date = receiver.split(';')[1]
+	parts = receiver.split(';')
+	date = parts[len(parts)-1]
 	print(date)
-	# Correct bad format for timezone (+100 to +0100)
-	m = re.search('[\+\-][0-9]{1}[0]{2}', date)
-	if m and date [-4:] != '0000':
-		date = date.replace(m.group(0), m.group(0)[:-3] + '0' + m.group(0)[-3:] )
-
-	d =  dateparser.parse(date)
-	if d == None:
-		d =  dateparser.parse(date[:-5])
-
-	return d
-
-	"""
-	m = re.search('[0-9]{1,2}\s*[a-zA-Z]{3}\s*[0-9]{2,}\s*[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\s*[\+\-\0-9]{5}', receiver)
-	if m :
-		res = m.group(0)
-		# Correct bad format for timezone (+08:00 to +0800)
-		if res[-3] == '-' or res[-3] == '+':
-			res += '00'
-		# Correct bad format for timezone (+100 to +0100)
-		if res[-4] == '-' or res[-4] == '+':
-			res = res[:-3] + '0' + res[-3:]
-		# Python doesn't handle "-0000" offset but "+0000"
-		if "-0000" in res:
-			res = res.replace("-0000", "+0000")
-		# The split and join are used to delete useless spaces
-		#return datetime.datetime.strptime(' '.join(res.split()), '%d %b %Y %X %z')
-		return dateparser.parse(res)
+	d = email.utils.parsedate_tz(date)
+	if d :
+		t = email.utils.mktime_tz(d)
+	elif dateparser.parse(date) :
+		t = dateparser.parse(date).timestamp()
 	else :
-		m = re.search('[0-9]{1,2}\s*[a-zA-Z]{3}\s*[0-9]{2,}\s*[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\s*[A-Z]{3,}', receiver)
-		if m :
-			res = m.group(0)
-			return dateparser.parse(res)
-		# No match use the date field instead
-		return None
-	"""
+		print(receiver[-37:])
+		date = receiver[-37:]	
+		d = email.utils.parsedate_tz(date)
+		if d :
+			t = email.utils.mktime_tz(d)
+		else :
+			t = dateparser.parse(date).timestamp()
+	return datetime.datetime.utcfromtimestamp(t)
 
+# Get the number of received field in the mail header
 def GetNbrHop(headers):
 	hops = headers.get_all('Received')
 	if hops == None:
@@ -182,11 +160,12 @@ def GetNbrHop(headers):
 	return len(hops)
 
 def CheckDateValidity(mail):
-	# If date is in the future
-	if mail.date_mail > datetime.datetime.today():
+	# If date is in the future or too much in the past (maybe edit past threshold to be more realistic)
+	if mail.date_mail < datetime.datetime(2000,5,1) or mail.date_mail > datetime.datetime.today():
 		return 0
 	return 1
 
+# Add To field with Cc and Bcc
 def GetAllReceivers(headers):
 	if headers.get_all('To'):
 		receivers = headers.get_all('To')
@@ -205,15 +184,8 @@ def ProcessString(s):
 	# Replace useless chars
 	for c in ['\n', '\r\n', '\\n', '\\', '\r\n\t', '\r' '\t', "\r" ]:
 			r = r.replace(c,' ')
-	r = re.sub(r'(\\+x[0-9A-Fa-f]{2})', ' ', r.encode('unicode_escape').decode())
-	return r
 
-def unescapematch(matchobj):
-	escapesequence = matchobj.group(0)
-	digits = escapesequence[2:]
-	ordinal = int(escapesequence, 16)
-	char = chr(ordinal)
-	return char
+	return r
 
 # For html content, interprets it to only keep the text result
 def GetRenderFromHTMLString(html):
@@ -243,6 +215,7 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 		os.makedirs(dstdir)
 	# Sort the list of files, to process files in order
 	files = sorted(os.listdir(srcdir), key=lambda x: (int(re.sub('\D','',x)),x))
+	# Different list for each feature
 	textList = []
 	nbrHopList = []
 	nbrReceiversList = []
@@ -282,7 +255,9 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 
 
 def BuildText(text):
-
+	# Clean encoding problems 
+	text = re.sub(r'(\\+x[0-9A-Fa-f]{2})', ' ', text.encode('unicode_escape').decode())
+	
 	# Remove punctuation
 	for char in string.punctuation:
 		text = text.replace(char, ' ')
@@ -301,6 +276,7 @@ def BuildText(text):
 	for word in filtered:
 		result.append(stemmer.stem(word))
 
+	# Return a string resulting from the join of the list of words
 	return ' '.join(result)
 
 ###################################################################
