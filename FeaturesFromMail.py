@@ -1,14 +1,15 @@
 #!/usr/bin/python
-# FileName: Subsampling.py
-# Version 1.0 by Tao Ban, 2010.5.26
-# This function extract all the contents, ie subject and first part from the .eml file
-# and store it in a new file with the same name in the dst dir.
-
+# This script is a modification of the script descripted below
+	# FileName: Subsampling.py
+	# Version 1.0 by Tao Ban, 2010.5.26
+	# This function extract all the contents, ie subject and first part from the .eml file
+	# and store it in a new file with the same name in the dst dir.
+# This script compute the feature from the mails
+# Usage : script.py mailDirectory DestinationDirectoryForFeaturesFile
 import mailparser
 import email
 import os, sys, stat
 import shutil
-import sys
 import json
 import nltk
 import string
@@ -17,11 +18,9 @@ import dateparser
 import re
 from bs4 import BeautifulSoup
 from nltk.stem.snowball import SnowballStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 def ExtractSubPayload (filename):
 	''' Extract the subject and payload from the .eml file.
-
 	'''
 	if not os.path.exists(filename): # dest path doesnot exist
 		print("ERROR: input file does not exist:", filename)
@@ -32,7 +31,6 @@ def ExtractSubPayload (filename):
 	b = fp.read()
 
 	msg = mailparser.parse_from_bytes(b)
-
 
 	return ProcessMessage(msg)
 
@@ -52,7 +50,6 @@ def ProcessMessage(mail):
 
 	# Get the list of all receivers (To, CC, Bcc)
 	receivers = GetAllReceivers(headers)
-	# GetDeliveryTime(headers)
 	nbrHops = GetNbrHop(headers)
 
 	if headers['X-Mailer'] :
@@ -61,16 +58,13 @@ def ProcessMessage(mail):
 		xMailer = None
 
 	msgJson = {
-	'from' : mail.from_,
-	'headers' : headers,
-	'to' : mail.to_,
-	'date' : str(mail.date_mail),
 	'subject' : mail.subject,
 	'payload' : data,
 	'attachments' : listAttach,
 	'X-Mailer' : xMailer,
 	'NumberHop' : nbrHops,
 	'NumberReceiver' : len(receivers),
+	'NumberHeaders' : len(headers.keys()),
 	'ValidityDate' : CheckDateValidity(mail)# 1 is valid, 0 is not valid
 	}
 
@@ -111,69 +105,8 @@ def ExtractAttachments(mail):
 				listAttach.append(attachJson)
 	return listAttach
 
-# get the total time of travel of mail (receivers field are used to compue it)
-def GetDeliveryTime(headers):
-	receivers = headers.get_all('Received')
-	if receivers :
-		firstReceiver = receivers[0]
-		lastReceiver = receivers[len(receivers)-1]
-		dateSent = GetTimeFromReceiverString(lastReceiver)
-		dateDelivery = GetTimeFromReceiverString(firstReceiver)
-		if dateDelivery  == None:
-			dateDelivery = GetTimeFromReceiverString(headers.get('date'))
 
-
-		print("Date Delivery : " + str(dateDelivery))
-		print("Date sent : " + str(dateSent))
-		print("Time taken ; " + str(dateDelivery - dateSent))
-
-	elif headers.get('Delivery-Date') :
-		delDate = headers.get('Delivery-Date')
-		# print(datetime.datetime.strptime(delDate, '%a %b %d %X %Y'))
-	else :
-		print("No date")
-
-def GetTimeFromReceiverString(receiver):
-	if 'GMT' in receiver:
-			receiver = receiver.replace('GMT', '+0000')
-	date = receiver.split(';')[1]
-	print(date)
-	# Correct bad format for timezone (+100 to +0100)
-	m = re.search('[\+\-][0-9]{1}[0]{2}', date)
-	if m and date [-4:] != '0000':
-		date = date.replace(m.group(0), m.group(0)[:-3] + '0' + m.group(0)[-3:] )
-
-	d =  dateparser.parse(date)
-	if d == None:
-		d =  dateparser.parse(date[:-5])
-
-	return d
-
-	"""
-	m = re.search('[0-9]{1,2}\s*[a-zA-Z]{3}\s*[0-9]{2,}\s*[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\s*[\+\-\0-9]{5}', receiver)
-	if m :
-		res = m.group(0)
-		# Correct bad format for timezone (+08:00 to +0800)
-		if res[-3] == '-' or res[-3] == '+':
-			res += '00'
-		# Correct bad format for timezone (+100 to +0100)
-		if res[-4] == '-' or res[-4] == '+':
-			res = res[:-3] + '0' + res[-3:]
-		# Python doesn't handle "-0000" offset but "+0000"
-		if "-0000" in res:
-			res = res.replace("-0000", "+0000")
-		# The split and join are used to delete useless spaces
-		#return datetime.datetime.strptime(' '.join(res.split()), '%d %b %Y %X %z')
-		return dateparser.parse(res)
-	else :
-		m = re.search('[0-9]{1,2}\s*[a-zA-Z]{3}\s*[0-9]{2,}\s*[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\s*[A-Z]{3,}', receiver)
-		if m :
-			res = m.group(0)
-			return dateparser.parse(res)
-		# No match use the date field instead
-		return None
-	"""
-
+# Get the number of received field in the mail header
 def GetNbrHop(headers):
 	hops = headers.get_all('Received')
 	if hops == None:
@@ -181,11 +114,12 @@ def GetNbrHop(headers):
 	return len(hops)
 
 def CheckDateValidity(mail):
-	# If date is in the future
-	if mail.date_mail > datetime.datetime.today():
+	# If date is in the future or too much in the past (maybe edit past threshold to be more realistic)
+	if mail.date_mail < datetime.datetime(2000,5,1) or mail.date_mail > datetime.datetime.today():
 		return 0
 	return 1
 
+# Add To field with Cc and Bcc
 def GetAllReceivers(headers):
 	if headers.get_all('To'):
 		receivers = headers.get_all('To')
@@ -204,6 +138,7 @@ def ProcessString(s):
 	# Replace useless chars
 	for c in ['\n', '\r\n', '\\n', '\\', '\r\n\t', '\r' '\t', "\r" ]:
 			r = r.replace(c,' ')
+
 	return r
 
 # For html content, interprets it to only keep the text result
@@ -232,10 +167,13 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 	save the file to the dstdir with the same name.'''
 	if not os.path.exists(dstdir): # dest path doesnot exist
 		os.makedirs(dstdir)
+	# Sort the list of files, to process files in order
 	files = sorted(os.listdir(srcdir), key=lambda x: (int(re.sub('\D','',x)),x))
+	# Different list for each feature
 	textList = []
 	nbrHopList = []
 	nbrReceiversList = []
+	nbrHeaders = []
 	validityDateList = []
 	allFeatures = []
 	for file in files:
@@ -254,26 +192,26 @@ def ExtractBodyFromDir ( srcdir, dstdir ):
 			nbrHopList.append(processedMessage['NumberHop'])
 			# Nbr nbr Receivers
 			nbrReceiversList.append(processedMessage['NumberReceiver'])
+			# Nbr headers
+			nbrHeaders.append(processedMessage['NumberHeaders'])
 			# Validity Date
 			validityDateList.append(processedMessage['ValidityDate'])
-
-			#dstfile = open(dstpath, 'w')
-			#dstfile.write(result)
-			#dstfile.close()
-
 
 	allFeatures.append(textList)
 	allFeatures.append(nbrHopList)
 	allFeatures.append(nbrReceiversList)
+	allFeatures.append(nbrHeaders)
 	allFeatures.append(validityDateList)
-	print("%d %d %d %d" % (len(textList),len(nbrHopList),len(nbrReceiversList),len(validityDateList)))
+	print("%d %d %d %d %d" % (len(textList),len(nbrHopList),len(nbrReceiversList),len(validityDateList), len(nbrHeaders)))
 	dstpath = os.path.join(dstdir, 'features')
 	with open(dstpath, 'w') as dstfile :
 		json.dump(allFeatures, dstfile)
 
 
 def BuildText(text):
-
+	# Clean encoding problems 
+	text = re.sub(r'(\\+x[0-9A-Fa-f]{2})', ' ', text.encode('unicode_escape').decode())
+	
 	# Remove punctuation
 	for char in string.punctuation:
 		text = text.replace(char, ' ')
@@ -282,11 +220,9 @@ def BuildText(text):
 	for s in sentences:
 		words = nltk.tokenize.word_tokenize(s)
 
-
 	# Remove stop_words
 	stopWords = nltk.corpus.stopwords.words('english')
 	filtered = [e.lower() for e in words if not e.lower() in stopWords]
-
 
 	# Stemming
 	result = []
@@ -294,7 +230,7 @@ def BuildText(text):
 	for word in filtered:
 		result.append(stemmer.stem(word))
 
-
+	# Return a string resulting from the join of the list of words
 	return ' '.join(result)
 
 ###################################################################
